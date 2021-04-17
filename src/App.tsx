@@ -122,7 +122,14 @@ export const App = (): JSX.Element => {
                 </li>
               ))}
             </ul>
-            <button onClick={onToggleReady} disabled={isLoading}>
+            <button
+              onClick={onToggleReady}
+              disabled={isLoading}
+              style={{
+                width: "100%",
+                height: "500px",
+              }}
+            >
               {clientUser?.isReady ? "Unready" : "Ready"}
             </button>
             <hr />
