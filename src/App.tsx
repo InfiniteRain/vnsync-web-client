@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import "./App.css";
 import { emitEvent } from "./helpers";
@@ -16,14 +16,25 @@ export const App = (): JSX.Element => {
   const [clientUser, setClientUser] = useState<RoomUser | null>(null);
   const [connection, setConnection] = useState<Socket | null>(null);
 
+  const isInRoomRef = useRef<boolean>();
+  isInRoomRef.current = isInRoom;
+
   const onJoinRoom = () => {
     setLoading(true);
 
     const username = usernameInput.trim();
     const roomName = roomNameInput.trim();
-    const connection = io("wss://vnsync-server-33vh3.ondigitalocean.app");
+    const connection = io("wss://vnsync-server-33vh3.ondigitalocean.app", {
+      reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionAttempts: 120,
+    });
 
     connection.on("connect", async () => {
+      if (isInRoomRef.current) {
+        return;
+      }
+
       const result = await emitEvent<string>(
         connection,
         "joinRoom",
@@ -43,7 +54,11 @@ export const App = (): JSX.Element => {
       setLastError("");
     });
 
-    connection.on("disconnect", () => {
+    connection.on("disconnect", (reason: string) => {
+      if (reason !== "io server disconnect") {
+        return;
+      }
+
       setInRoom(false);
       setLoading(false);
       setRoomName("");
@@ -82,7 +97,7 @@ export const App = (): JSX.Element => {
 
   return (
     <>
-      <h2>VNSync</h2>
+      <h2>VNSync v0.4</h2>
       {lastError !== "" && <h3>Error: {lastError}</h3>}
       <div>
         {!isInRoom && (
