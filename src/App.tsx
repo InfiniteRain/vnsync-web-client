@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import "./App.css";
 import { emitEvent } from "./helpers";
+import { RoomState } from "./Interfaces/RoomState";
 import { RoomUser } from "./Interfaces/RoomUser";
 
 export const App = (): JSX.Element => {
@@ -12,7 +13,10 @@ export const App = (): JSX.Element => {
   const [roomNameInput, setRoomNameInput] = useState("");
 
   const [roomName, setRoomName] = useState("");
-  const [roomState, setRoomState] = useState<RoomUser[]>([]);
+  const [roomState, setRoomState] = useState<RoomState>({
+    clipboard: [],
+    membersState: [],
+  });
   const [clientUser, setClientUser] = useState<RoomUser | null>(null);
   const [connection, setConnection] = useState<Socket | null>(null);
 
@@ -27,10 +31,20 @@ export const App = (): JSX.Element => {
     const connection = io("wss://vnsync-server-33vh3.ondigitalocean.app", {
       reconnection: true,
       reconnectionDelay: 500,
-      reconnectionAttempts: 120,
+      reconnectionAttempts: 5,
+    });
+
+    connection.io.on("reconnect_attempt", () => {
+      console.log("reconnect attempt");
+    });
+
+    connection.io.on("reconnect_failed", () => {
+      console.log("reconnect failed");
     });
 
     connection.on("connect", async () => {
+      console.log("connected");
+
       if (isInRoomRef.current) {
         return;
       }
@@ -56,22 +70,35 @@ export const App = (): JSX.Element => {
 
     connection.on("disconnect", (reason: string) => {
       if (reason !== "io server disconnect") {
+        console.log("reconnecting...?");
+
         return;
       }
 
       setInRoom(false);
       setLoading(false);
       setRoomName("");
-      setRoomState([]);
+      setRoomState({
+        clipboard: [],
+        membersState: [],
+      });
       setClientUser(null);
       setConnection(null);
     });
 
-    connection.on("roomStateChange", (roomState: RoomUser[]) => {
+    connection.on("roomStateChange", (roomState: RoomState) => {
+      console.log("room state change");
+
       setRoomState(roomState);
       setClientUser(
-        roomState.find((roomUser) => roomUser.username === username) || null
+        roomState.membersState.find(
+          (roomUser) => roomUser.username === username
+        ) || null
       );
+    });
+
+    connection.on("connect_error", (reason) => {
+      console.log(reason);
     });
 
     setConnection(connection);
@@ -97,7 +124,7 @@ export const App = (): JSX.Element => {
 
   return (
     <>
-      <h2>VNSync v0.4</h2>
+      <h2>VNSync v0.5</h2>
       {lastError !== "" && <h3>Error: {lastError}</h3>}
       <div>
         {!isInRoom && (
@@ -131,7 +158,7 @@ export const App = (): JSX.Element => {
           <>
             <h3>Room name: {roomName}</h3>
             <ul>
-              {roomState.map((roomUser) => (
+              {roomState.membersState.map((roomUser) => (
                 <li key={roomUser.username}>
                   {roomUser.username} - {!roomUser.isReady && "not"} ready
                 </li>
@@ -148,6 +175,9 @@ export const App = (): JSX.Element => {
               {clientUser?.isReady ? "Unready" : "Ready"}
             </button>
             <hr />
+            {roomState.clipboard.map((clipboardEntry: string) => (
+              <p>{clipboardEntry}</p>
+            ))}
           </>
         )}
       </div>
