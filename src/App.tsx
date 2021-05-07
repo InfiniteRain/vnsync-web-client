@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import "./App.css";
 import { emitEvent } from "./helpers";
@@ -11,6 +11,8 @@ export const App = (): JSX.Element => {
   const [lastError, setLastError] = useState("");
   const [usernameInput, setUsernameInput] = useState("");
   const [roomNameInput, setRoomNameInput] = useState("");
+  const [isAutoReady, setAutoReady] = useState(false);
+  const [isCopyToClipboard, setCopyToClipboard] = useState(false);
 
   const [roomName, setRoomName] = useState("");
   const [roomState, setRoomState] = useState<RoomState>({
@@ -21,7 +23,15 @@ export const App = (): JSX.Element => {
   const [connection, setConnection] = useState<Socket | null>(null);
 
   const isInRoomRef = useRef<boolean>();
+  const isAutoReadyRef = useRef<boolean>();
+  const isCopyToClipboardRef = useRef<boolean>();
+  const clientUserRef = useRef<RoomUser | null>();
+  const connectionRef = useRef<Socket | null>();
   isInRoomRef.current = isInRoom;
+  isAutoReadyRef.current = isAutoReady;
+  isCopyToClipboardRef.current = isCopyToClipboard;
+  clientUserRef.current = clientUser;
+  connectionRef.current = connection;
 
   const onJoinRoom = () => {
     setLoading(true);
@@ -89,12 +99,21 @@ export const App = (): JSX.Element => {
     connection.on("roomStateChange", (roomState: RoomState) => {
       console.log("room state change");
 
-      setRoomState(roomState);
-      setClientUser(
+      const clientUser =
         roomState.membersState.find(
           (roomUser) => roomUser.username === username
-        ) || null
-      );
+        ) || null;
+
+      setRoomState(roomState);
+      setClientUser(clientUser);
+
+      if (
+        clientUser !== null &&
+        !clientUser.isReady &&
+        isAutoReadyRef.current
+      ) {
+        onToggleReady();
+      }
     });
 
     connection.on("connect_error", (reason) => {
@@ -107,8 +126,10 @@ export const App = (): JSX.Element => {
   const onToggleReady = async () => {
     setLoading(true);
 
+    const connection = connectionRef.current;
+
     if (!connection) {
-      throw new Error("Connection is now defined.");
+      throw new Error("Connection is not defined.");
     }
 
     const result = await emitEvent<undefined>(connection, "toggleReady");
@@ -122,9 +143,38 @@ export const App = (): JSX.Element => {
     setLoading(false);
   };
 
+  useEffect(() => {
+    let lastClipboardEntry: string | null = null;
+    let repeat = false;
+    const clipboardInterval = setInterval(async () => {
+      const lastEntryElement = document.getElementById(
+        "last-cb-entry"
+      ) as HTMLInputElement;
+      const clipboardEntry = lastEntryElement?.value || "";
+
+      if (
+        lastClipboardEntry !== clipboardEntry &&
+        lastClipboardEntry !== null &&
+        lastEntryElement &&
+        isCopyToClipboardRef.current
+      ) {
+        lastEntryElement.focus();
+        lastEntryElement.select();
+        lastEntryElement.setSelectionRange(0, 99999);
+        repeat = !document.execCommand("copy");
+      }
+
+      if (!repeat) {
+        lastClipboardEntry = clipboardEntry;
+      }
+    }, 100);
+
+    return () => clearInterval(clipboardInterval);
+  }, []);
+
   return (
     <>
-      <h2>VNSync v0.5</h2>
+      <h2>VNSync v0.7</h2>
       {lastError !== "" && <h3>Error: {lastError}</h3>}
       <div>
         {!isInRoom && (
@@ -156,6 +206,13 @@ export const App = (): JSX.Element => {
         )}
         {isInRoom && (
           <>
+            <input
+              type="text"
+              id="last-cb-entry"
+              value={roomState.clipboard[0] || ""}
+              readOnly
+              hidden
+            />
             <h3>Room name: {roomName}</h3>
             <ul>
               {roomState.membersState.map((roomUser) => (
@@ -166,16 +223,42 @@ export const App = (): JSX.Element => {
             </ul>
             <button
               onClick={onToggleReady}
-              disabled={isLoading}
+              disabled={isLoading || isAutoReady}
               style={{
                 width: "100%",
-                height: "500px",
+                height: "300px",
               }}
             >
               {clientUser?.isReady ? "Unready" : "Ready"}
             </button>
             <hr />
-            {roomState.clipboard.map((clipboardEntry: string) => (
+            <label>Auto ready: </label>
+            <input
+              type="checkbox"
+              checked={isAutoReady}
+              onChange={(e) => {
+                if (
+                  clientUserRef.current !== null &&
+                  !clientUserRef.current?.isReady &&
+                  !isAutoReadyRef.current
+                ) {
+                  onToggleReady();
+                }
+
+                setAutoReady(e.target.checked);
+              }}
+            />
+            <br />
+            <label>Automatically copy to clipboard: </label>
+            <input
+              type="checkbox"
+              checked={isCopyToClipboard}
+              onChange={(e) => {
+                setCopyToClipboard(e.target.checked);
+              }}
+            />
+            <hr />
+            {roomState.clipboard.map((clipboardEntry, index) => (
               <p>{clipboardEntry}</p>
             ))}
           </>
