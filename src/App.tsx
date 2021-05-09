@@ -23,11 +23,13 @@ export const App = (): JSX.Element => {
   const [connection, setConnection] = useState<Socket | null>(null);
 
   const isInRoomRef = useRef<boolean>();
+  const isLoadingRef = useRef<boolean>();
   const isAutoReadyRef = useRef<boolean>();
   const isCopyToClipboardRef = useRef<boolean>();
   const clientUserRef = useRef<RoomUser | null>();
   const connectionRef = useRef<Socket | null>();
   isInRoomRef.current = isInRoom;
+  isLoadingRef.current = isLoading;
   isAutoReadyRef.current = isAutoReady;
   isCopyToClipboardRef.current = isCopyToClipboard;
   clientUserRef.current = clientUser;
@@ -110,7 +112,8 @@ export const App = (): JSX.Element => {
       if (
         clientUser !== null &&
         !clientUser.isReady &&
-        isAutoReadyRef.current
+        isAutoReadyRef.current &&
+        !isLoadingRef.current
       ) {
         onToggleReady();
       }
@@ -174,7 +177,7 @@ export const App = (): JSX.Element => {
 
   return (
     <>
-      <h2>VNSync v0.7</h2>
+      <h2>VNSync v0.8</h2>
       {lastError !== "" && <h3>Error: {lastError}</h3>}
       <div>
         {!isInRoom && (
