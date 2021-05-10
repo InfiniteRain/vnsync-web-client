@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import "./App.css";
 import { emitEvent } from "./helpers";
@@ -12,7 +12,6 @@ export const App = (): JSX.Element => {
   const [usernameInput, setUsernameInput] = useState("");
   const [roomNameInput, setRoomNameInput] = useState("");
   const [isAutoReady, setAutoReady] = useState(false);
-  const [isCopyToClipboard, setCopyToClipboard] = useState(false);
 
   const [roomName, setRoomName] = useState("");
   const [roomState, setRoomState] = useState<RoomState>({
@@ -25,13 +24,11 @@ export const App = (): JSX.Element => {
   const isInRoomRef = useRef<boolean>();
   const isLoadingRef = useRef<boolean>();
   const isAutoReadyRef = useRef<boolean>();
-  const isCopyToClipboardRef = useRef<boolean>();
   const clientUserRef = useRef<RoomUser | null>();
   const connectionRef = useRef<Socket | null>();
   isInRoomRef.current = isInRoom;
   isLoadingRef.current = isLoading;
   isAutoReadyRef.current = isAutoReady;
-  isCopyToClipboardRef.current = isCopyToClipboard;
   clientUserRef.current = clientUser;
   connectionRef.current = connection;
 
@@ -44,9 +41,11 @@ export const App = (): JSX.Element => {
       reconnection: true,
       reconnectionDelay: 500,
       reconnectionAttempts: 5,
+      autoConnect: false,
     });
 
     connection.io.on("reconnect_attempt", () => {
+      console.log(connection.auth);
       console.log("reconnect attempt");
     });
 
@@ -123,6 +122,15 @@ export const App = (): JSX.Element => {
       console.log(reason);
     });
 
+    connection.on("sessionId", (sessionId: string) => {
+      console.log(sessionId);
+      connection.auth = {
+        sessionId,
+      };
+    });
+
+    connection.connect();
+
     setConnection(connection);
   };
 
@@ -146,38 +154,9 @@ export const App = (): JSX.Element => {
     setLoading(false);
   };
 
-  useEffect(() => {
-    let lastClipboardEntry: string | null = null;
-    let repeat = false;
-    const clipboardInterval = setInterval(async () => {
-      const lastEntryElement = document.getElementById(
-        "last-cb-entry"
-      ) as HTMLInputElement;
-      const clipboardEntry = lastEntryElement?.value || "";
-
-      if (
-        lastClipboardEntry !== clipboardEntry &&
-        lastClipboardEntry !== null &&
-        lastEntryElement &&
-        isCopyToClipboardRef.current
-      ) {
-        lastEntryElement.focus();
-        lastEntryElement.select();
-        lastEntryElement.setSelectionRange(0, 99999);
-        repeat = !document.execCommand("copy");
-      }
-
-      if (!repeat) {
-        lastClipboardEntry = clipboardEntry;
-      }
-    }, 100);
-
-    return () => clearInterval(clipboardInterval);
-  }, []);
-
   return (
     <>
-      <h2>VNSync v0.8</h2>
+      <h2>VNSync v0.9</h2>
       {lastError !== "" && <h3>Error: {lastError}</h3>}
       <div>
         {!isInRoom && (
@@ -209,13 +188,6 @@ export const App = (): JSX.Element => {
         )}
         {isInRoom && (
           <>
-            <input
-              type="text"
-              id="last-cb-entry"
-              value={roomState.clipboard[0] || ""}
-              readOnly
-              hidden
-            />
             <h3>Room name: {roomName}</h3>
             <ul>
               {roomState.membersState.map((roomUser) => (
@@ -249,15 +221,6 @@ export const App = (): JSX.Element => {
                 }
 
                 setAutoReady(e.target.checked);
-              }}
-            />
-            <br />
-            <label>Automatically copy to clipboard: </label>
-            <input
-              type="checkbox"
-              checked={isCopyToClipboard}
-              onChange={(e) => {
-                setCopyToClipboard(e.target.checked);
               }}
             />
             <hr />
