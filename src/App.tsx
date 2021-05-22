@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import "./App.css";
 import { emitEvent } from "./helpers";
@@ -12,6 +12,7 @@ export const App = (): JSX.Element => {
   const [usernameInput, setUsernameInput] = useState("");
   const [roomNameInput, setRoomNameInput] = useState("");
   const [isAutoReady, setAutoReady] = useState(false);
+  const [isCopyToClipboard, setCopyToClipboard] = useState(false);
 
   const [roomName, setRoomName] = useState("");
   const [roomState, setRoomState] = useState<RoomState>({
@@ -24,13 +25,18 @@ export const App = (): JSX.Element => {
   const isInRoomRef = useRef<boolean>();
   const isLoadingRef = useRef<boolean>();
   const isAutoReadyRef = useRef<boolean>();
+  const isCopyToClipboardRef = useRef<boolean>();
+
   const clientUserRef = useRef<RoomUser | null>();
   const connectionRef = useRef<Socket | null>();
+  const roomStateRef = useRef<RoomState>();
   isInRoomRef.current = isInRoom;
   isLoadingRef.current = isLoading;
   isAutoReadyRef.current = isAutoReady;
   clientUserRef.current = clientUser;
   connectionRef.current = connection;
+  roomStateRef.current = roomState;
+  isCopyToClipboardRef.current = isCopyToClipboard;
 
   const onJoinRoom = () => {
     setLoading(true);
@@ -154,9 +160,36 @@ export const App = (): JSX.Element => {
     setLoading(false);
   };
 
+  useEffect(() => {
+    let lastClipboardEntry: string | null = null;
+    let repeat = false;
+    const clipboardInterval = setInterval(async () => {
+      const clipboardEntry = roomStateRef.current?.clipboard[0] || "";
+
+      if (
+        lastClipboardEntry !== clipboardEntry &&
+        lastClipboardEntry !== null &&
+        isCopyToClipboardRef.current
+      ) {
+        try {
+          await navigator.clipboard.writeText(clipboardEntry);
+          repeat = false;
+        } catch {
+          repeat = true;
+        }
+      }
+
+      if (!repeat) {
+        lastClipboardEntry = clipboardEntry;
+      }
+    }, 100);
+
+    return () => clearInterval(clipboardInterval);
+  }, []);
+
   return (
     <>
-      <h2>VNSync v0.9</h2>
+      <h2>VNSync v0.10</h2>
       {lastError !== "" && <h3>Error: {lastError}</h3>}
       <div>
         {!isInRoom && (
@@ -221,6 +254,18 @@ export const App = (): JSX.Element => {
                 }
 
                 setAutoReady(e.target.checked);
+              }}
+            />
+            <br />
+            <label>
+              Automatically copy to clipboard (page has to be active for
+              clipboard updates to happen):
+            </label>
+            <input
+              type="checkbox"
+              checked={isCopyToClipboard}
+              onChange={(e) => {
+                setCopyToClipboard(e.target.checked);
               }}
             />
             <hr />
